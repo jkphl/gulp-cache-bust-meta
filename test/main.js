@@ -1,11 +1,12 @@
 'use strict';
 
-var cachebust = require('../');
-var should = require('should');
-var assert = require('stream-assert');
-var path = require('path');
-var File = require('vinyl');
-var gulp = require('gulp');
+const cachebust = require('../');
+const should = require('should');
+const assert = require('stream-assert');
+const path = require('path');
+const File = require('vinyl');
+const gulp = require('gulp');
+const hash = require('../lib/hash.js');
 require('mocha');
 
 var fixtures = function (glob) {
@@ -40,8 +41,28 @@ describe('gulp-cache-bust-meta', function () {
         // });
 
         it('should work', function (done) {
-            gulp.src(fixtures('*'))
-                .pipe(cachebust())
+            var template = fixtures('template.txt');
+            var templates = {};
+            templates[template] = 'template.txt';
+            var hash1 = hash('one\n', 8);
+            var hash2 = hash('two\n', 8);
+            var metaHash = hash([hash1, hash2].join('-'), 8);
+
+            gulp.src(fixtures('*/**'))
+                .pipe(cachebust(templates))
+                .pipe(assert.length(3))
+                .pipe(assert.nth(0, function (d) {
+                    path.basename(d.path).should.eql('test1.' + hash1 + '.txt');
+                    d.contents.toString().should.eql('one\n');
+                }))
+                .pipe(assert.nth(1, function (d) {
+                    path.basename(d.path).should.eql('test2.' + hash2 + '.txt');
+                    d.contents.toString().should.eql('two\n');
+                }))
+                .pipe(assert.nth(2, function (d) {
+                    path.basename(d.path).should.eql('template.txt');
+                    d.contents.toString().should.eql(metaHash + '@@altMetaHash\n');
+                }))
                 .pipe(assert.end(done));
         });
 

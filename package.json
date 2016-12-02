@@ -14,18 +14,17 @@
     "cache",
     "bust"
   ],
-  "dependencies": {
-
-  },
+  "dependencies": {},
   "devDependencies": {
     "gulp": "^3.9.1",
     "gulp-jshint": "^2.0.4",
-    "jshint": "^2.9.4",
     "istanbul": "^0.4.5",
+    "jshint": "^2.9.4",
     "mocha": "^3.2.0",
     "mocha-lcov-reporter": "^1.2.0",
     "should": "^11.1.1",
-    "stream-assert": "^2.0.3"
+    "stream-assert": "^2.0.3",
+    "vinyl-read": "^1.0.0"
   },
   "scripts": {
     "test1": "gulp && istanbul test _mocha --report html -- test/*.js --reporter spec",

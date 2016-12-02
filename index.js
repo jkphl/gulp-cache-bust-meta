@@ -1,31 +1,31 @@
 'use strict';
 
-var through = require('through2');
-var path = require('path');
-var fs = require('fs');
-var File = require('vinyl');
-var crypto = require('crypto');
-var cloneStats = require('clone-stats');
+const through = require('through2');
+const path = require('path');
+const fs = require('fs');
+const File = require('vinyl');
+const hash = require('./lib/hash');
+const cloneStats = require('clone-stats');
+const vinylRead = require('vinyl-read');
+
 
 /**
  * Concatenation by directory structure
  *
  * @param {String|Array} ext File extension
- * @param {Object} opt Options
+ * @param {Object} opt opt
  * @returns {*}
  */
-module.exports = function (files, opt) {
-
-    // Build a list of meta replacement files
-    files = files || [];
-    if (typeof files === 'string') {
-        files = files.trim().length ? [files.trim()] : [];
+module.exports = function (map, opt) {
+    // Build a replacement template map
+    if (!map || map.constructor !== Object || Object.keys(map).length === 0) {
+        map = {};
     }
 
     opt = opt || {};
-    opt.deleteOriginals = !!opt.deleteOriginals;
     opt.hashLength = parseInt(opt.hashLength) || 8;
     opt.separator = ('separator' in opt) ? opt.separator : '.';
+    opt.metaHashPlaceholder = opt.metaHashPlaceholder || '@@metaHash';
 
     // Define a simple rtrim function
     var rtrim = function (str, strip) {
@@ -34,9 +34,9 @@ module.exports = function (files, opt) {
         }
         return str;
     };
-    var hashReplacements = [];
+    var hashReplacements = {};
     var hashes = [];
-    var targets = [];
+    var sourceFiles = [];
 
     /**
      * Buffer incoming contents
@@ -53,12 +53,6 @@ module.exports = function (files, opt) {
             return;
         }
 
-        var cwd = path.resolve(file.cwd || '.');
-        var hash = crypto.createHash('md5').update(file.contents).digest('hex').substr(0, Math.max(8, opt.hashLength));
-        var fileExtension = path.extname(file.path);
-        var hashedFilename = path.dirname(file.path) + path.sep + path.basename(file.path, fileExtension) + opt.separator + hash + fileExtension;
-        console.log(hashedFilename);
-
         // We don't do streams (yet)
         // if (file.isStream()) {
         //     this.emit('error', new Error('gulp-concat-flatten: Streaming not supported'));
@@ -66,6 +60,24 @@ module.exports = function (files, opt) {
         //     return;
         // }
 
+        // Calculate the content hash and file name replacement
+        var fileContentHash = hash(file.contents, opt.hashLength);
+        var fileExtension = path.extname(file.path);
+        var fileRelativePath = file.relative;
+        var fileRelativeDir = path.dirname(fileRelativePath);
+        fileRelativeDir = fileRelativeDir.length ? (fileRelativeDir + path.sep) : '';
+        var fileName = path.basename(fileRelativePath);
+        var fileHashedName = path.basename(fileRelativePath, fileExtension) + opt.separator + fileContentHash + fileExtension;
+        var fileRelativeHashedPath = fileRelativeDir + fileHashedName;
+
+        // Register the file name replacement
+        hashReplacements[fileRelativePath] = fileRelativeHashedPath;
+
+        // Register the hash
+        hashes.push(fileContentHash);
+
+        // Register the source file
+        sourceFiles.push(file);
 
         cb();
     }
@@ -77,27 +89,32 @@ module.exports = function (files, opt) {
      */
     function endStream(cb) {
 
-        cb();
-        return;
+        // Register the hashed target files
+        sourceFiles.forEach(function (file) {
+            var targetFile = file.clone();
+            targetFile.path = targetFile.base + hashReplacements[targetFile.relative];
+            this.push(targetFile);
+        }, this);
 
-        // If no files were passed in, no files go out ...
-        if (!latestFile || (Object.keys(concats).length === 0 && concats.constructor === Object)) {
+        // Calculate & register the meta hash
+        hashReplacements[opt.metaHashPlaceholder] = hash(hashes.join('-'), opt.hashLength);
+
+        // See if there are additional templates that should be parsed
+        var templates = Object.keys(map);
+        if (!templates.length) {
             cb();
             return;
         }
 
-        // Run through all registered contact instances
-        for (var targetBase in concats) {
-            var joinedFile = new File({
-                path: targetBase,
-                contents: concats[targetBase].concat.content,
-                stat: concats[targetBase].stats
-            });
-            if (concats[targetBase].concat.sourceMapping) {
-                joinedFile.sourceMap = JSON.parse(concats[targetBase].concat.sourceMap);
+        vinylRead.sync(templates).forEach(function(template) {
+            template.path = map[template.path];
+            var templateContent = template.contents.toString();
+            for (var repl in hashReplacements) {
+                templateContent = templateContent.replace(repl, hashReplacements[repl]);
             }
-            this.push(joinedFile);
-        }
+            template.contents = Buffer.fromString ? Buffer.fromString(templateContent) : new Buffer(templateContent);
+            this.push(template);
+        }, this);
         cb();
     }
 
