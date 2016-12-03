@@ -1,13 +1,13 @@
-# gulp-concat-flatten [![NPM version][npm-image]][npm-url] [![NPM downloads][npm-downloads]][npm-url] [![Build Status][travis-image]][travis-url]  [![Coverage Status][coveralls-image]][coveralls-url] [![Dependency Status][depstat-image]][depstat-url] [![Development Dependency Status][devdepstat-image]][devdepstat-url]
+# gulp-cache-bust-meta [![NPM version][npm-image]][npm-url] [![NPM downloads][npm-downloads]][npm-url] [![Build Status][travis-image]][travis-url]  [![Coverage Status][coveralls-image]][coveralls-url] [![Dependency Status][depstat-image]][depstat-url] [![Development Dependency Status][devdepstat-image]][devdepstat-url]
 
-is a Gulp plugin that concatenates files based on their directory structure. Starting at a base directory of your choice, it recursively flattens out subdirectories and concatenates the files within these. Files in the base directory will get copied without concatenation. 
+is a Gulp plugin that creates copies of files with content dependent hashes added to their file names, which is a common [cache busting technique](https://css-tricks.com/strategies-for-cache-busting-css/#article-header-id-2). Additionally, it creates a "meta hash" (which changes every time a source files changes) and triggers a simple templating process taking the source file changes into account.
 
 ## Installation
 
-To install `gulp-concat-flatten` as a development dependency, simply run:
+To install `gulp-cache-bust-meta` as a development dependency, simply run:
 
 ```shell
-npm install --save-dev gulp-concat-flatten
+npm install --save-dev gulp-cache-bust-meta
 ```
 
 ## Usage
@@ -15,65 +15,75 @@ npm install --save-dev gulp-concat-flatten
 Add it to your `gulpfile.js` and use it like this:
 
 ```javascript
-const gulp      = require('gulp');
-const concat    = require('gulp-concat-flatten');
-const sort      = require('gulp-sort');
+const gulp             = require('gulp');
+const cacheBustMeta    = require('gulp-cache-bust-meta');
 
-gulp.src('path/**/*.txt')
-	.pipe(sort()) // Recommendation, see below
-	.concat('path/to/assets', 'txt', {'newLine': '\n'})
-	.pipe(gulp.dest('out'));
+gulp.src(['path/to/assets/**/*'])
+    .pipe(cacheBustMeta({'path/to/index-template.html': 'index.html'}))
+    .pipe(gulp.dest('path/to/dist'));
 ```
 
-Running the shown task on a source file structure like this:
+Running the task on a source file structure like this:
 
 ```
 path
 `-- to
-    |-- 00_outside.txt
+    |-- index-template.html
     `-- assets
-        |-- 01_first.txt
-        |-- 02_second
-        |   |-- 01_second_first.txt
-        |   |-- 02_second_second
-        |   |   `-- second_second_first.txt
-        |   `-- 03_second_third.txt
-        `-- 03_third.txt
+        |-- js
+        |   `-- main.js
+        `-- css
+            `-- main.css
 ```
 
 would result in:
 
 ```
 out
-|-- 01_first.txt
-|-- 02_second.txt
-`-- 03_third.txt
+|-- index.html
+|-- js
+|   `-- main.5bbf5a52.js
+`-- css
+    `-- main.c193497a.css
 ```
 
 In detail,
 
-* the file `path/to/00_outside.txt` would be skipped as it's not contained in the base directory `path/to/assets`,
-* the files `path/to/assets/01_first.txt` and `path/to/assets/03_third.txt` would be copied over without concatenation,
-* the directory `path/to/assets/02_second` would be recursively concatenated and appended with the file extension `".txt"`.
+* the files `path/to/assets/js/main.js` and `path/to/assets/css/main.css` are copied to the destination (preserving the directory structure as yielded by the [glob](https://github.com/isaacs/node-glob) expression) with their names supplemented by a content based hash,
+* the template `path/to/index-template.html` is copied to `index.html` in the destination directory with the following string replacements applied:
 
-Generally, I recommend sorting the source files via [gulp-sort](https://github.com/pgilad/gulp-sort) prior to piping them through `concat()`. This way you can reliably control their order for concatenation using file and directory names.
+```
+js/main.js      → js/main.5bbf5a52.js
+css/main.css    → js/main.c193497a.css
+@@metaHash      → js/83f914b4
+```    
+
+The meta hash change can e.g. be used for invalidating a cookie previously sent to a client.
 
 ## Signature
 
 ```
 /**
- * Concatenation by directory structure
+ * Cache busting including (meta) hash replacement in template files
  *
- * @param {String} base    Base directory
- * @param {String} ext     Optional: File extension
- *                         Will be used as file extension for concatenated directories
- * @param {Object} opt     Optional: Options, defaulting to:
- *                         {
- *                             newLine: "\n" // Concatenation string, may be empty
- *                         }
+ * @param {Object} map    Optional: Templates to process
+ *                        {
+ *                              '/path/to/template/file.xyz': 'target.xyz'
+ *                        }
+ * @param {Object} opt    Optional: Options, defaulting to
+ *                        {
+ *                              hashLength: 8,
+ *                              separator: '.',
+ *                              metaHashPlaceholder: '@@metaHash'
+ *                        }
+ * @returns {DestroyableTransform} Transform
  */
-concat(base, ext, opt);
+cacheBustMeta(map, opt);
 ```
+
+The `map` argument may be empty if you don't want to process any templates.
+
+The `opt` keys may be given individually. The default hash length of 8 characters may be altered by `hashLength`. The character(s) given by `separator` are used for prepending the hash when added to a file name. The template placeholder for the meta hash may be altered by `metaHashPlaceholder`. 
 
 ## Changelog
 
@@ -84,20 +94,20 @@ Please refer to the [changelog](CHANGELOG.md) for a complete release history.
 
 Copyright © 2016 Joschi Kuphal <joschi@kuphal.net> / [@jkphl](https://twitter.com/jkphl).
 
-*gulp-concat-flatten* is licensed under the terms of the [MIT license](LICENSE).
+*gulp-cache-bust-meta* is licensed under the terms of the [MIT license](LICENSE).
 
 
-[npm-url]: https://npmjs.org/package/gulp-concat-flatten
-[npm-image]: https://badge.fury.io/js/gulp-concat-flatten.png
-[npm-downloads]: https://img.shields.io/npm/dm/gulp-concat-flatten.svg
+[npm-url]: https://npmjs.org/package/gulp-cache-bust-meta
+[npm-image]: https://badge.fury.io/js/gulp-cache-bust-meta.png
+[npm-downloads]: https://img.shields.io/npm/dm/gulp-cache-bust-meta.svg
 
-[travis-url]: http://travis-ci.org/jkphl/gulp-concat-flatten
-[travis-image]: https://secure.travis-ci.org/jkphl/gulp-concat-flatten.png
+[travis-url]: http://travis-ci.org/jkphl/gulp-cache-bust-meta
+[travis-image]: https://secure.travis-ci.org/jkphl/gulp-cache-bust-meta.png
 
-[coveralls-url]: https://coveralls.io/r/jkphl/gulp-concat-flatten
-[coveralls-image]: https://img.shields.io/coveralls/jkphl/gulp-concat-flatten.svg
+[coveralls-url]: https://coveralls.io/r/jkphl/gulp-cache-bust-meta
+[coveralls-image]: https://img.shields.io/coveralls/jkphl/gulp-cache-bust-meta.svg
 
-[depstat-url]: https://david-dm.org/jkphl/gulp-concat-flatten
-[depstat-image]: https://david-dm.org/jkphl/gulp-concat-flatten/status.svg
-[devdepstat-url]: https://david-dm.org/jkphl/gulp-concat-flatten?type=dev
-[devdepstat-image]: https://david-dm.org/jkphl/gulp-concat-flatten/dev-status.svg
+[depstat-url]: https://david-dm.org/jkphl/gulp-cache-bust-meta
+[depstat-image]: https://david-dm.org/jkphl/gulp-cache-bust-meta/status.svg
+[devdepstat-url]: https://david-dm.org/jkphl/gulp-cache-bust-meta?type=dev
+[devdepstat-image]: https://david-dm.org/jkphl/gulp-cache-bust-meta/dev-status.svg

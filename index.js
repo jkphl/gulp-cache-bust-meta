@@ -1,42 +1,62 @@
 'use strict';
 
-const through = require('through2');
-const path = require('path');
-const fs = require('fs');
-const File = require('vinyl');
-const hash = require('./lib/hash');
-const cloneStats = require('clone-stats');
-const vinylRead = require('vinyl-read');
-
+var through = require('through2');
+var path = require('path');
+var fs = require('fs');
+var hash = require('./lib/hash');
+var vinylFile = require('vinyl-file');
 
 /**
- * Concatenation by directory structure
+ * Cache busting including (meta) hash replacement in template files
  *
- * @param {String|Array} ext File extension
- * @param {Object} opt opt
- * @returns {*}
+ * @param {Object} map    Optional: Templates to process
+ *                        {
+ *                              '/path/to/template/file.xyz': 'target.xyz'
+ *                        }
+ * @param {Object} opt    Optional: Options, defaulting to
+ *                        {
+ *                              hashLength: 8,
+ *                              separator: '.',
+ *                              metaHashPlaceholder: '@@metaHash'
+ *                        }
+ * @returns {*} Transform
  */
 module.exports = function (map, opt) {
-    // Build a replacement template map
-    if (!map || map.constructor !== Object || Object.keys(map).length === 0) {
-        map = {};
-    }
 
+    // Sanitize options / set defaults
     opt = opt || {};
     opt.hashLength = parseInt(opt.hashLength) || 8;
     opt.separator = ('separator' in opt) ? opt.separator : '.';
     opt.metaHashPlaceholder = opt.metaHashPlaceholder || '@@metaHash';
 
-    // Define a simple rtrim function
-    var rtrim = function (str, strip) {
-        while (str.length && strip.length && (str.substr(-strip.length) === strip)) {
-            str = str.substr(0, str.length - strip.length);
-        }
-        return str;
-    };
+    // Variables
     var hashReplacements = {};
     var hashes = [];
     var sourceFiles = [];
+    var templates = [];
+
+    // Validate & prepare the replacement templates
+    if (map && (map.constructor === Object) && Object.keys(map).length) {
+        for (var from in map) {
+
+            // Fail if replacement name is invalid
+            if ((typeof map[from] !== 'string') || (map[from].constructor !== String) || !map[from].trim().length) {
+                throw new Error('gulp-cache-bust-meta: Template target path is invalid');
+            }
+
+            try {
+                var templateFile = vinylFile.readSync(from);
+                if (!templateFile.stat.isFile()) {
+                    throw 'error';
+                }
+                templateFile.path = map[from];
+                templates.push(templateFile);
+
+            } catch (e) {
+                throw new Error('gulp-cache-bust-meta: Template "' + from + '" is invalid');
+            }
+        }
+    }
 
     /**
      * Buffer incoming contents
@@ -54,11 +74,11 @@ module.exports = function (map, opt) {
         }
 
         // We don't do streams (yet)
-        // if (file.isStream()) {
-        //     this.emit('error', new Error('gulp-concat-flatten: Streaming not supported'));
-        //     cb();
-        //     return;
-        // }
+        if (file.isStream()) {
+            this.emit('error', new Error('gulp-cache-bust-meta: Streaming not supported'));
+            cb();
+            return;
+        }
 
         // Calculate the content hash and file name replacement
         var fileContentHash = hash(file.contents, opt.hashLength);
@@ -66,12 +86,10 @@ module.exports = function (map, opt) {
         var fileRelativePath = file.relative;
         var fileRelativeDir = path.dirname(fileRelativePath);
         fileRelativeDir = fileRelativeDir.length ? (fileRelativeDir + path.sep) : '';
-        var fileName = path.basename(fileRelativePath);
         var fileHashedName = path.basename(fileRelativePath, fileExtension) + opt.separator + fileContentHash + fileExtension;
-        var fileRelativeHashedPath = fileRelativeDir + fileHashedName;
 
         // Register the file name replacement
-        hashReplacements[fileRelativePath] = fileRelativeHashedPath;
+        hashReplacements[fileRelativePath] = fileRelativeDir + fileHashedName;
 
         // Register the hash
         hashes.push(fileContentHash);
@@ -99,15 +117,8 @@ module.exports = function (map, opt) {
         // Calculate & register the meta hash
         hashReplacements[opt.metaHashPlaceholder] = hash(hashes.join('-'), opt.hashLength);
 
-        // See if there are additional templates that should be parsed
-        var templates = Object.keys(map);
-        if (!templates.length) {
-            cb();
-            return;
-        }
-
-        vinylRead.sync(templates).forEach(function(template) {
-            template.path = map[template.path];
+        // Process the replacement templates
+        templates.forEach(function (template) {
             var templateContent = template.contents.toString();
             for (var repl in hashReplacements) {
                 templateContent = templateContent.replace(repl, hashReplacements[repl]);
