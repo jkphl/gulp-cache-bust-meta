@@ -4,6 +4,7 @@ var cacheBustMeta = require('../');
 var should = require('should');
 var assert = require('stream-assert');
 var path = require('path');
+var fs = require('fs');
 var File = require('vinyl');
 var gulp = require('gulp');
 var hash = require('../lib/hash.js');
@@ -97,12 +98,14 @@ describe('gulp-cache-bust-meta', function () {
                 .pipe(cacheBustMeta(templates))
                 .pipe(assert.length(2))
                 .pipe(assert.nth(0, function (d) {
+                    var stat = fs.statSync(fixtures('files/test1.txt'));
                     path.basename(d.path).should.eql('test1.' + hash1 + '.txt');
-                    d.stat.mode.should.eql(parseInt('100775', 8));
+                    d.stat.mode.should.eql(stat.mode);
                 }))
                 .pipe(assert.nth(1, function (d) {
+                    var stat = fs.statSync(fixtures('template.txt'));
                     path.basename(d.path).should.eql('template.txt');
-                    d.stat.mode.should.eql(parseInt('100775', 8));
+                    d.stat.mode.should.eql(stat.mode);
                 }))
                 .pipe(assert.end(done));
         });
