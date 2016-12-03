@@ -1,11 +1,12 @@
 {
   "name": "gulp-cache-bust-meta",
   "description": "A Gulp plugin for hash based (meta) cache busting",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "repository": "jkphl/gulp-cache-bust-meta",
   "author": "Joschi Kuphal <joschi@kuphal.net> (https://jkphl.is)",
   "files": [
-    "index.js"
+    "index.js",
+    "lib/hash.js"
   ],
   "keywords": [
     "gulpplugin",
