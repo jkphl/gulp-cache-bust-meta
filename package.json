@@ -16,7 +16,8 @@
     "bust"
   ],
   "dependencies": {
-    "vinyl-file": "^2.0.0"
+    "vinyl-file": "^2.0.0",
+    "through2": "^2.0.3"
   },
   "devDependencies": {
     "gulp": "^3.9.1",
