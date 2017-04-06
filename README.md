@@ -54,7 +54,7 @@ In detail,
 
 ```
 js/main.js      → js/main.5bbf5a52.js
-css/main.css    → js/main.c193497a.css
+css/main.css    → css/main.c193497a.css
 @@metaHash      → js/83f914b4
 ```    
 
